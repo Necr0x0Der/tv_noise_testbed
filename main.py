@@ -15,15 +15,16 @@ from visualization.plots import plot_r2_vs_sigma
 # Import our isolated runners
 from training.runners import (
     run_vae, run_predvae, run_ar, run_ar2, run_sar,
-    run_rnd_proj, run_pca4, run_pca8,
+    run_rnd_proj, run_pred_enc, run_pca4, run_pca8,
     run_arn, run_jepa, run_vjepa, run_bjepa
 )
 
 # A registry mapping names to their execution functions
 EXPERIMENT_REGISTRY = {
     "VAE": run_vae,
-    "RNDproj": run_rnd_proj,
     "PredVAE": run_predvae,
+    "RNDproj": run_rnd_proj,
+    "PredEnc": run_pred_enc,
     "PCA(0-3)": run_pca4,
     "PCA(4-7)": run_pca8,
     "AR(1)": run_ar,
@@ -84,7 +85,7 @@ def main():
     sigmas = np.linspace(0.0, 10.0, 11)
 
     # Easily toggle models to run ablations
-    MODELS_TO_RUN = ["VAE", "PCA(0-3)", "PCA(4-7)", "JEPA", "BJEPA"]  # Change to None to run all
+    MODELS_TO_RUN = ["VAE", "PredVAE", "RNDproj", "PredEnc", "JEPA", "BJEPA"]  # Change to None to run all
 
     rows = []
     for s in sigmas:
