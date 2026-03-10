@@ -59,6 +59,28 @@ def run_predvae(x_tr, s_tr, x_te, s_te, device, steps, lr):
         zhat_p_te.cpu().numpy(), s_n_te.cpu().numpy()
     )
 
+def run_rnd_proj(x_tr, s_tr, x_te, s_te, device, steps, lr):
+    return run_vae(x_tr, s_tr, x_te, s_te, device, steps=0, lr=0)
+
+def pca_comp(x_tr, s_tr, x_te, s_te, c1=0, c2=4):
+    x_t_tr, x_n_tr, s_n_tr = x_tr[:-1], x_tr[1:], s_tr[1:]
+    x_t_te, s_n_te = x_te[:-1], s_te[1:]
+    _, _, V_k = torch.pca_lowrank(x_t_tr, q=8, center=True)
+    V_k = V_k[:,c1:c2]
+    def pca(x):
+        return x @ V_k ### (- x.mean(0))
+    return evaluate_linear_probe(
+        pca(x_t_tr).cpu().numpy(), s_n_tr.cpu().numpy(),
+        pca(x_t_te).cpu().numpy(), s_n_te.cpu().numpy()
+    )
+
+def run_pca4(x_tr, s_tr, x_te, s_te, device, steps, lr):
+    return pca_comp(x_tr, s_tr, x_te, s_te, 0, 4)
+
+def run_pca8(x_tr, s_tr, x_te, s_te, device, steps, lr):
+    return pca_comp(x_tr, s_tr, x_te, s_te, 4, 8)
+
+
 def run_ar(x_tr, s_tr, x_te, s_te, device, steps, lr):
     x_t_tr, x_n_tr, s_n_tr = x_tr[:-1], x_tr[1:], s_tr[1:]
     x_t_te, s_n_te = x_te[:-1], s_te[1:]
