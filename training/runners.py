@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from config import DX, DZ
 from data.dataset import make_lagged_tensor
-from models.vae import LinearVAE, LinearPredVAE
+from models.vae import LinearVAE, LinearPredVAE, LinearGatedPredAE
 from models.ar import LinearAR, LinearAR2, LinearSeasonalAR, LinearARn
 from models.jepa import LinearJEPA, LinearVJEPA
 from models.bjepa import LinearBJEPA
@@ -60,6 +60,12 @@ def run_predvae(x_tr, s_tr, x_te, s_te, device, steps, lr):
     )
 
 def run_pred_enc(x_tr, s_tr, x_te, s_te, device, steps, lr):
+    '''
+    LinearPredVAE is reused here, but it is neither variational, nor AE.
+    We just reuse mu and pred, and perform training in two steps:
+      - first, the predictor is trained with a random encoder,
+      - second, the encoder is trained with the fixed pretrained predictor
+    '''
     x_t_tr, x_n_tr, s_n_tr = x_tr[:-1], x_tr[1:], s_tr[1:]
     x_t_te, s_n_te = x_te[:-1], s_te[1:]
 
@@ -81,16 +87,49 @@ def run_pred_enc(x_tr, s_tr, x_te, s_te, device, steps, lr):
     train_full_batch(predvae, predenc_loss, steps=steps, lr=lr)
 
     with torch.no_grad():
-        _, _, _, _, _, zhat_p_tr = predvae(x_t_tr)
-        _, _, _, _, _, zhat_p_te = predvae(x_t_te)
+        _, _, mu_tr, _, _, _ = predvae(x_t_tr)
+        _, _, mu_te, _, _, _ = predvae(x_t_te)
 
     return evaluate_linear_probe(
-        zhat_p_tr.cpu().numpy(), s_n_tr.cpu().numpy(),
-        zhat_p_te.cpu().numpy(), s_n_te.cpu().numpy()
+        mu_tr.cpu().numpy(), s_n_tr.cpu().numpy(),
+        mu_te.cpu().numpy(), s_n_te.cpu().numpy()
     )
 
 def run_rnd_proj(x_tr, s_tr, x_te, s_te, device, steps, lr):
     return run_vae(x_tr, s_tr, x_te, s_te, device, steps=0, lr=0)
+
+
+def run_gated_predae(x_tr, s_tr, x_te, s_te, device, steps, lr):
+    '''
+    Gated predictive autoencoder with fair reconstruction loss
+    and predictive loss over gated latents, which (loss) is
+    regularized via hard projection-like normalization
+    '''
+    x_t_tr, x_n_tr, s_n_tr = x_tr[:-1], x_tr[1:], s_tr[1:]
+    x_t_te, x_n_te, s_n_te = x_te[:-1], x_te[1:], s_te[1:]
+
+    gatedpae = LinearGatedPredAE(Dx=DX, bias=True).to(device)
+
+    def gatedpae_loss(m):
+        xhat_t, mu4_t, mu8_t, mu4_n, mu4_n_hat, xhat_n = m(x_t_tr, x_n_tr)
+        recon_t = F.mse_loss(xhat_t, x_t_tr)
+        pred_t = F.mse_loss(mu4_n, mu4_n_hat)
+        pred_x = F.mse_loss(xhat_n, x_n_tr)
+        # loss_amp = mu8_t.square().mean() - 0.5 * mu4_t.square().mean() # a hacky way
+        # small pred_x is added to favor signal latents when sigma=0
+        return recon_t + pred_t + 0.001 * pred_x # + 0.01 * loss_amp
+
+    train_full_batch(gatedpae, gatedpae_loss, steps=steps, lr=lr)
+
+    with torch.no_grad():
+        _, mu4_tr, _, _, _, _ = gatedpae(x_t_tr, x_n_tr)
+        _, mu4_te, _, _, _, _ = gatedpae(x_t_te, x_n_te)
+
+    return evaluate_linear_probe(
+        mu4_tr.cpu().numpy(), s_n_tr.cpu().numpy(),
+        mu4_te.cpu().numpy(), s_n_te.cpu().numpy()
+    )
+
 
 def pca_comp(x_tr, s_tr, x_te, s_te, c1=0, c2=4):
     x_t_tr, x_n_tr, s_n_tr = x_tr[:-1], x_tr[1:], s_tr[1:]

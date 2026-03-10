@@ -15,7 +15,7 @@ from visualization.plots import plot_r2_vs_sigma
 # Import our isolated runners
 from training.runners import (
     run_vae, run_predvae, run_ar, run_ar2, run_sar,
-    run_rnd_proj, run_pred_enc, run_pca4, run_pca8,
+    run_rnd_proj, run_pred_enc, run_pca4, run_pca8, run_gated_predae,
     run_arn, run_jepa, run_vjepa, run_bjepa
 )
 
@@ -27,6 +27,7 @@ EXPERIMENT_REGISTRY = {
     "PredEnc": run_pred_enc,
     "PCA(0-3)": run_pca4,
     "PCA(4-7)": run_pca8,
+    "GatedPAE": run_gated_predae,
     "AR(1)": run_ar,
     "AR(2)": run_ar2,
     "SAR": run_sar,
@@ -85,7 +86,12 @@ def main():
     sigmas = np.linspace(0.0, 10.0, 11)
 
     # Easily toggle models to run ablations
-    MODELS_TO_RUN = ["VAE", "PredVAE", "RNDproj", "PredEnc", "JEPA", "BJEPA"]  # Change to None to run all
+    # Step 1
+    # MODELS_TO_RUN = ["VAE", "PredVAE", "JEPA", "BJEPA"]  # Change to None to run all
+    # Step 2
+    # MODELS_TO_RUN = ["VAE", "PredVAE", "RNDproj", "PredEnc", "JEPA", "BJEPA"]
+    # Step 3
+    MODELS_TO_RUN = ["VAE", "GatedPAE", "RNDproj", "PredEnc", "JEPA", "BJEPA"]
 
     rows = []
     for s in sigmas:
