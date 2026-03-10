@@ -59,6 +59,36 @@ def run_predvae(x_tr, s_tr, x_te, s_te, device, steps, lr):
         zhat_p_te.cpu().numpy(), s_n_te.cpu().numpy()
     )
 
+def run_pred_enc(x_tr, s_tr, x_te, s_te, device, steps, lr):
+    x_t_tr, x_n_tr, s_n_tr = x_tr[:-1], x_tr[1:], s_tr[1:]
+    x_t_te, s_n_te = x_te[:-1], s_te[1:]
+
+    predvae = LinearPredVAE(Dx=DX, Dz=DZ).to(device)
+    def predict_loss(m):
+        z1 = m.mu(x_t_tr).detach()
+        z2 = m.mu(x_n_tr).detach()
+        z2p = m.pred(z1)
+        return F.mse_loss(z2, z2p)
+
+    def predenc_loss(m):
+        z1 = m.mu(x_t_tr)
+        z2 = m.mu(x_n_tr)
+        with torch.no_grad():
+            z2p = m.pred(z1)
+        return F.mse_loss(z2, z2p)
+
+    train_full_batch(predvae, predict_loss, steps=steps, lr=lr)
+    train_full_batch(predvae, predenc_loss, steps=steps, lr=lr)
+
+    with torch.no_grad():
+        _, _, _, _, _, zhat_p_tr = predvae(x_t_tr)
+        _, _, _, _, _, zhat_p_te = predvae(x_t_te)
+
+    return evaluate_linear_probe(
+        zhat_p_tr.cpu().numpy(), s_n_tr.cpu().numpy(),
+        zhat_p_te.cpu().numpy(), s_n_te.cpu().numpy()
+    )
+
 def run_rnd_proj(x_tr, s_tr, x_te, s_te, device, steps, lr):
     return run_vae(x_tr, s_tr, x_te, s_te, device, steps=0, lr=0)
 
