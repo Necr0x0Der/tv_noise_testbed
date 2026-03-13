@@ -2,6 +2,7 @@
 import torch
 import numpy as np
 import pandas as pd
+import os
 
 # from config import DX, DS, DD, DEFAULT_SEED, DEFAULT_LR, DEFAULT_TRAIN_STEPS
 from config import *
@@ -10,7 +11,7 @@ from utils.metrics import env_snr_db
 from env.noisy_tv import rollout_noisy_tv
 from data.dataset import make_train_test_split
 from visualization.timeseries import plot_time_series_paper_style
-from visualization.plots import plot_r2_vs_sigma
+from visualization.plots import plot_r2_vs_sigma, plot_components_scatter
 
 # Import our isolated runners
 from training.runners import (
@@ -25,8 +26,8 @@ EXPERIMENT_REGISTRY = {
     "PredVAE": run_predvae,
     "RNDproj": run_rnd_proj,
     "PredEnc": run_pred_enc,
-    "PCA(0-3)": run_pca4,
-    "PCA(4-7)": run_pca8,
+    "PCA(1-4)": run_pca4,
+    "PCA(5-8)": run_pca8,
     "GatedPAE": run_gated_predae,
     "AR(1)": run_ar,
     "AR(2)": run_ar2,
@@ -42,7 +43,7 @@ def run_sigma(
         sigma, active_models=None, device="cpu", seed=DEFAULT_SEED,
         train_T=6000, test_T=2000, a_scale=0.98, w_std=0.3,
         steps=DEFAULT_TRAIN_STEPS, lr=DEFAULT_LR,
-        make_timeseries=False, ts_points=2000, ts_dim=0,
+        make_timeseries=False, make_scatter=False, ts_points=2000, ts_dim=0,
 ):
     # Default to running all models if none specified
     if active_models is None:
@@ -77,20 +78,26 @@ def run_sigma(
             sigma=sigma, env_snr=env_snr, t=t_np, y_true=s_n_te.cpu().numpy(),
             yhat_dict=preds, dim=ts_dim, max_points=ts_points
         )
+    if make_scatter:
+        for m in active_models:
+            plot_components_scatter(preds, m, out_path=f"figs/scatter_{m}_{sigma}.png")
 
     return results
 
 
 def main():
+    os.makedirs("figs", exist_ok=True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     sigmas = np.linspace(0.0, 10.0, 11)
 
     # Easily toggle models to run ablations
     # Step 1
-    # MODELS_TO_RUN = ["VAE", "PredVAE", "JEPA", "BJEPA"]  # Change to None to run all
+    # MODELS_TO_RUN = ["VAE", "JEPA", "BJEPA", "VJEPA", "PredVAE"]  # Change to None to run all
     # Step 2
     # MODELS_TO_RUN = ["VAE", "PredVAE", "RNDproj", "PredEnc", "JEPA", "BJEPA"]
     # Step 3
+    # MODELS_TO_RUN = ["VAE", "PCA(1-4)", "PCA(5-8)", "JEPA"]
+    # Step 4
     MODELS_TO_RUN = ["VAE", "GatedPAE", "RNDproj", "PredEnc", "JEPA", "BJEPA"]
 
     rows = []
@@ -98,13 +105,13 @@ def main():
         row = run_sigma(
             sigma=float(s), active_models=MODELS_TO_RUN, device=device,
             seed=DEFAULT_SEED, train_T=5000, test_T=300, a_scale=0.99,
-            w_std=0.1, steps=10000, lr=1e-3, make_timeseries=True
+            w_std=0.1, steps=10000, lr=1e-3, make_timeseries=False, make_scatter=False,
         )
         print(row)
         rows.append(row)
 
     df = pd.DataFrame(rows).sort_values("sigma").reset_index(drop=True)
-    plot_r2_vs_sigma(df, MODELS_TO_RUN, out_path="r2_vs_sigma.png")
+    plot_r2_vs_sigma(df, MODELS_TO_RUN, out_path="figs/r2_vs_sigma.png")
 
     print("\nSummary:\n", df)
 

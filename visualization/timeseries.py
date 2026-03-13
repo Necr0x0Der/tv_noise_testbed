@@ -40,4 +40,4 @@ def plot_time_series_paper_style(sigma, env_snr, t, y_true, yhat_dict, dim=0, ma
     plt.grid(True, alpha=0.25)
     plt.legend(frameon=False, ncol=3, loc="lower left")
     plt.tight_layout()
-    plt.savefig(f"series_{sigma}.png")
+    plt.savefig(f"figs/series_{sigma}.png")
